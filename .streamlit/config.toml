@@ -1,0 +1,31 @@
+# How the app looks: iOS system colors, light and dark, following the device's setting.
+
+[client]
+toolbarMode = "minimal"         # no Deploy button or developer menu
+
+[browser]
+gatherUsageStats = false
+
+[server]
+runOnSave = true                # code edits show up right away, without pressing Rerun
+address = "localhost"           # only this computer can open the app; see the README to use it on your phone
+
+[theme]
+primaryColor = "#007AFF"
+font = "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif"
+baseRadius = "0.75rem"
+showWidgetBorder = false
+
+[theme.light]
+primaryColor = "#007AFF"
+backgroundColor = "#F2F2F7"             # iOS grouped background
+secondaryBackgroundColor = "#E9E9EE"    # text fields and segmented controls
+textColor = "#000000"
+borderColor = "#D1D1D6"
+
+[theme.dark]
+primaryColor = "#0A84FF"
+backgroundColor = "#000000"
+secondaryBackgroundColor = "#2C2C2E"
+textColor = "#FFFFFF"
+borderColor = "#38383A"

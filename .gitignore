@@ -1,0 +1,10 @@
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Your data and API keys stay on this computer
+data/
+.env
+.streamlit/secrets.toml
