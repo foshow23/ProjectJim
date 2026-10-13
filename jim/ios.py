@@ -1,4 +1,4 @@
-"""The iOS look, so the web app feels like an iPhone app: grouped lists on a gray
+"""The iOS look, so the web app feels like a factory Apple application; grouped lists on a gray
 background, large titles, a tab bar at the bottom, and sheets.
 
 How it works: Python builds small pieces of HTML (always escaping text), a stylesheet makes them
