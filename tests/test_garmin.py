@@ -14,7 +14,7 @@ GPX = """<?xml version="1.0"?>
 <gpx creator="Garmin Connect" xmlns="http://www.topografix.com/GPX/1/1"
      xmlns:ns3="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">
  <metadata><time>2026-10-04T11:51:00.000Z</time></metadata>
- <trk><name>Oakville Running</name><type>running</type><trkseg>
+ <trk><name>Riverside Running</name><type>running</type><trkseg>
   <trkpt lat="43.4500" lon="-79.6800"><ele>90.0</ele><time>2026-10-04T11:51:00.000Z</time>
    <extensions><ns3:TrackPointExtension><ns3:hr>120</ns3:hr></ns3:TrackPointExtension></extensions></trkpt>
   <trkpt lat="43.4545" lon="-79.6800"><ele>95.0</ele><time>2026-10-04T11:54:00.000Z</time>
@@ -46,7 +46,7 @@ START = 1_791_114_660      # 2026-10-04 11:51:00 UTC
 
 def test_gpx_gives_the_route_heart_rate_and_distance():
     workout = garmin_files.parse(GPX)
-    assert (workout.title, workout.kind, workout.start_ts, workout.duration) == ("Oakville Running", "run", START, 360)
+    assert (workout.title, workout.kind, workout.start_ts, workout.duration) == ("Riverside Running", "run", START, 360)
     assert len(workout.route) == 3 and has_gps(workout.route)
     assert workout.distance == pytest.approx(1000, rel=0.01)      # 0.009 degrees of latitude is 1 km
     assert workout.avg_hr == pytest.approx(143.3, abs=0.1)
@@ -93,7 +93,7 @@ def test_rejects_files_that_are_not_activities():
 
 # --- The full export ----------------------------------------------------------------------------
 
-def activity(activity_id: int, start: int, name="Brampton Running", kind="running", **values) -> dict:
+def activity(activity_id: int, start: int, name="Lakeside Running", kind="running", **values) -> dict:
     return {"activityId": activity_id, "name": name, "activityType": kind, "beginTimestamp": start * 1000,
             "duration": 1_800_000, "distance": 500_000, "calories": 1673.6, "avgHr": 150, "elevationGain": 1200} | values
 
@@ -141,7 +141,7 @@ def test_editing_the_start_time_in_garmin_does_not_duplicate(conn):
 
 def test_a_file_imported_first_is_matched_by_the_export(conn):
     garmin_files.import_file(conn, GPX)        # keyed by start time: the file name had no ID
-    garmin_export.import_archive(conn, export(activity(42, START, name="Oakville Running", duration=360_000,
+    garmin_export.import_archive(conn, export(activity(42, START, name="Riverside Running", duration=360_000,
                                                        distance=100_000)))
     assert (count(conn, "workouts"), count(conn, "workout_sources")) == (1, 1)
     record = conn.execute("SELECT * FROM workout_sources").fetchone()

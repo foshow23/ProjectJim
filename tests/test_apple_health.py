@@ -49,7 +49,7 @@ def add_garmin_run_and_hevy_lift(conn):
     no heart rate or calories on the lift."""
     merger.ingest(conn, [
         SourceWorkout(source=GARMIN, external_id="garmin-77", app_name="Garmin Connect", kind="run",
-                      title="Brampton Running", start_ts=timestamp("2026-10-10 07:00:02"), duration=1795.0,
+                      title="Lakeside Running", start_ts=timestamp("2026-10-10 07:00:02"), duration=1795.0,
                       distance=5000.0, avg_hr=157.0),
         SourceWorkout(source=HEVY, external_id="h1", app_name="Hevy", kind="strength", title="Push Day",
                       start_ts=timestamp("2026-10-06 06:43:00"), duration=2880.0),
@@ -65,7 +65,7 @@ def test_health_fills_in_heart_rate_and_calories(conn):
     assert (lift["title"], lift["avg_hr"], lift["calories"]) == ("Push Day", 110.0, 250.0)
     run = conn.execute("SELECT * FROM workouts WHERE kind='run'").fetchone()
     # Still the Garmin file's name and numbers; Health only filled in what was missing (calories).
-    assert (run["title"], run["distance"], run["avg_hr"], run["calories"]) == ("Brampton Running", 5000.0, 157.0, 400.0)
+    assert (run["title"], run["distance"], run["avg_hr"], run["calories"]) == ("Lakeside Running", 5000.0, 157.0, 400.0)
 
 
 def test_a_health_workout_with_nothing_to_fill_in_is_skipped(conn):

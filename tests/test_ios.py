@@ -14,7 +14,7 @@ def test_text_is_escaped_everywhere():
 
 
 def test_rows_with_an_id_are_buttons_and_others_are_not():
-    tappable = ios.row("Oakville Running", "21.10 km", id="42", icon_name="directions_run", tint="orange")
+    tappable = ios.row("Riverside Running", "21.10 km", id="42", icon_name="directions_run", tint="orange")
     assert tappable.startswith('<button class="ios-row has-icon" data-id="42">')
     assert "chevron_right" in tappable and "var(--ios-orange)" in tappable
     plain = ios.row("Distance", value="21.10 km")
