@@ -317,6 +317,54 @@ def block(html: str) -> str:
     return f'<div class="ios-row"><div class="ios-body">{html}</div></div>'
 
 
+def bold(line: str) -> str:
+    """Turns **bold** into <strong>bold</strong>. Splitting on ** puts the bold parts at the odd
+    positions: "a **b** c" -> ["a ", "b", " c"]. A ** with no partner is left as written."""
+    parts = line.split("**")
+    result = ""
+    for number, part in enumerate(parts):
+        if number % 2 == 0:
+            result += part                          # outside the stars
+        elif number < len(parts) - 1:
+            result += f"<strong>{part}</strong>"    # between a pair of **
+        else:
+            result += "**" + part                   # a lone ** at the end
+    return result
+
+
+def simple_markdown(text: str) -> str:
+    """The bits of Markdown the AI coach writes, as HTML: **bold**, "- " bullet points and
+    "#" headings. Each line is escaped first, so the text can't add any other HTML."""
+    html = ""
+    in_list = False
+    for line in text.strip().split("\n"):
+        line = line.strip()
+        is_bullet = line[:2] in ("- ", "* ", "• ")
+        is_heading = line.startswith("#")
+        if is_bullet:
+            line = line[2:]
+        if is_heading:
+            line = "**" + line.lstrip("#").strip() + "**"     # a heading shows as a bold line
+        line = bold(escape(line))
+
+        if is_bullet:
+            if not in_list:
+                html += '<ul style="margin:2px 0;padding-left:20px">'
+                in_list = True
+            html += f"<li>{line}</li>"
+            continue
+        if in_list:
+            html += "</ul>"
+            in_list = False
+        if line == "":
+            html += '<div style="height:6px"></div>'     # a blank line: a small gap
+        else:
+            html += f"<div>{line}</div>"
+    if in_list:
+        html += "</ul>"
+    return html
+
+
 def header(text: str, trailing: str = "") -> str:
     return f'<div class="ios-header"><span>{escape(text)}</span><span>{escape(trailing)}</span></div>'
 

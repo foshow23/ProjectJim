@@ -72,7 +72,7 @@ for turn in chat:
         st.caption(f":orange[{turn['error']}]")
         continue
     answer = turn["answer"]
-    text = escape(answer["text"]).replace("\n", "<br>")
+    text = ios.simple_markdown(answer["text"])      # **bold** and bullet points, everything else escaped
     html = f'<div class="ios-bubble-row"><div class="ios-bubble">{text}</div></div>'
     if answer["unverified"]:
         html += ('<div class="ios-caption" style="color:var(--ios-orange);margin:0 4px 4px">'

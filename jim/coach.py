@@ -44,7 +44,8 @@ it (a newer Garmin, Hevy, Lose It! or Apple Health export).
 - The overview's last_4_weeks often answers the question already: then answer straight away.
 - Otherwise look things up with the tools. When you need several lookups, ask for all of them at
   once in the same turn, not one after another. Dates are YYYY-MM-DD.
-- Keep answers short: two to five sentences, or a few bullet points. Talk to the user as "you"."""
+- Keep answers short: two to five sentences, or a few bullet points. Talk to the user as "you".
+- Formatting: only **bold** and "- " bullet points. No tables, headings or numbered lists."""
 
 # The tools the AI may call. Each one describes a get_... function below, so the AI knows what
 # it does and what to pass in. "strict" makes sure it always passes exactly these inputs.

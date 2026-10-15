@@ -32,3 +32,21 @@ def test_sections_and_tabs():
     html = ios.section([ios.row("One"), ios.row("Two")], title="Sets", footnote="Note", trailing="2")
     assert html.count('class="ios-row"') == 2
     assert html.index("Sets") < html.index("One") < html.index("Note")
+
+
+def test_simple_markdown_makes_bold_and_bullets():
+    html = ios.simple_markdown("**Body metrics:**\n- Weight: **216 lb**\n- Sleep: 8.3 hours\n\nNice work.")
+    assert html == ('<div><strong>Body metrics:</strong></div>'
+                    '<ul style="margin:2px 0;padding-left:20px"><li>Weight: <strong>216 lb</strong></li>'
+                    '<li>Sleep: 8.3 hours</li></ul>'
+                    '<div style="height:6px"></div><div>Nice work.</div>')
+
+
+def test_simple_markdown_escapes_everything_else():
+    html = ios.simple_markdown('**<script>alert(1)</script>** and a lone ** star')
+    assert "<script>" not in html
+    assert html == '<div><strong>&lt;script&gt;alert(1)&lt;/script&gt;</strong> and a lone ** star</div>'
+
+
+def test_simple_markdown_turns_headings_into_bold_lines():
+    assert ios.simple_markdown("### Your week") == "<div><strong>Your week</strong></div>"
