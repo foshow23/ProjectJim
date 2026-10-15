@@ -6,9 +6,9 @@ from html import escape
 
 import streamlit as st
 
-from . import ios, ui
+from . import db, ios, ui
 from .importers import garmin_export
-from .models import APPLE_HEALTH, GARMIN, HEVY
+from .models import GARMIN, HEVY
 
 
 def link_row(title: str, url: str, icon_name: str) -> str:
@@ -43,16 +43,14 @@ def show() -> None:
                 finally:
                     bar.empty()
 
-    apps = [row[0] for row in conn.execute(
-        "SELECT DISTINCT app_name FROM workout_sources WHERE source=? ORDER BY app_name", (APPLE_HEALTH,))]
+    imported = db.get_setting(conn, "apple_health_import") or {}
     health = ios.section([
-        ios.row("Apps seen", value=", ".join(apps) or "None yet"),
-        ios.row("Workouts", value=str(count("SELECT COUNT(*) FROM workout_sources WHERE source=?", APPLE_HEALTH))),
-        ios.row("Days of nutrition", value=str(count("SELECT COUNT(*) FROM daily_nutrition"))),
+        ios.row("Apps seen", value=", ".join(imported.get("sources", [])) or "None yet"),
         ios.row("Body measurements", value=f"{count('SELECT COUNT(*) FROM body_metrics'):,}"),
     ], title="Apple Health", footnote=(
-        "Apple Health holds what Garmin Connect, Hevy, Lose It!, a scale or a watch write to it: weight, sleep, "
-        "resting heart rate, steps and more. On your iPhone open Health, tap your profile picture, then Export "
+        "Only body measurements come from Apple Health: weight, body fat, sleep, resting heart rate, HRV, "
+        "VO2 max, steps and active calories. Workouts come from Garmin and Hevy, and food from Lose It!, "
+        "directly. On your iPhone open Health, tap your profile picture, then Export "
         "All Health Data. Send the export.zip to this computer and import it above. Each import replaces the "
         "last, so re-export whenever you want fresh data."))
 
@@ -90,7 +88,9 @@ def show() -> None:
         ios.row("Food data", "USDA FoodData Central (public domain) and Open Food Facts (Open Database License)",
                 kind="small"),
         ios.row("Weight of a cup or spoonful", "King Arthur Baking's ingredient weight chart", kind="small"),
-        ios.row("AI estimates", "Claude by Anthropic", kind="small"),
+        ios.row("AI estimates and the coach", "Claude by Anthropic", kind="small"),
+        ios.row("Push-up load", "64% of body weight: Ebben et al. (2011), Journal of Strength and "
+                "Conditioning Research", kind="small"),
     ], title="Credits", footnote="The look follows Apple's iOS design; ProjectJim isn't affiliated with any of "
                                  "the apps or services above.")
 

@@ -11,7 +11,7 @@ import pandas as pd
 import pydeck as pdk
 import streamlit as st
 
-from . import db, formatting, ios
+from . import bodyweight, db, formatting, ios
 from .models import APPLE_HEALTH, SOURCE_NAMES, RoutePoint, decode_route, has_gps
 
 KIND_ICONS = {"run": "directions_run", "walk": "directions_walk", "hike": "hiking", "ride": "directions_bike",
@@ -21,15 +21,28 @@ MAP_CREDIT = "Map © OpenStreetMap contributors, © CARTO"
 
 # --- List rows --------------------------------------------------------------------------------
 
-def strength_stats(conn: sqlite3.Connection) -> dict[int, sqlite3.Row]:
-    """Exercises and volume (weight × reps, warm-ups excluded) for every workout with sets."""
-    return {row["workout_id"]: row for row in conn.execute(
-        "SELECT s.workout_id, COUNT(DISTINCT e.exercise_index) AS exercises,"
-        " SUM(CASE WHEN e.set_type != 'warmup' THEN COALESCE(e.weight_kg, 0) * COALESCE(e.reps, 0) ELSE 0 END) AS volume"
-        " FROM exercise_sets e JOIN workout_sources s ON s.id = e.source_id GROUP BY s.workout_id")}
+def strength_stats(conn: sqlite3.Connection) -> dict[int, dict]:
+    """Exercises and volume (weight × reps, warm-ups excluded) for every workout with sets.
+    Bodyweight sets count your body weight on that day (see jim/bodyweight.py)."""
+    weights = bodyweight.weigh_ins(conn)
+    stats = {}      # workout id -> {"exercises": ..., "volume": ...}
+    for row in conn.execute("SELECT s.workout_id, w.start_ts, e.exercise_index, e.exercise_title, e.set_type,"
+                            " e.weight_kg, e.reps FROM exercise_sets e JOIN workout_sources s ON s.id = e.source_id"
+                            " JOIN workouts w ON w.id = s.workout_id"):
+        if row["workout_id"] not in stats:
+            stats[row["workout_id"]] = {"exercises": set(), "volume": 0.0}
+        workout = stats[row["workout_id"]]
+        workout["exercises"].add(row["exercise_index"])     # a set, so each exercise counts once
+        if row["set_type"] != "warmup" and row["reps"]:
+            body = bodyweight.body_weight_on(weights, row["start_ts"])
+            workout["volume"] += (bodyweight.set_load(row["exercise_title"], row["weight_kg"], body) or 0) * row["reps"]
+    # Swap each set of exercises for how many there were.
+    for workout in stats.values():
+        workout["exercises"] = len(workout["exercises"])
+    return stats
 
 
-def summary(workout: sqlite3.Row, stats: sqlite3.Row | None, unit: str) -> str:
+def summary(workout: sqlite3.Row, stats: dict | None, unit: str) -> str:
     """ "5.02 km · 5:24 /km · 27:06 · 152 bpm" or "6 exercises · 10,756 lb · 48:00"."""
     parts = []
     if workout["kind"] == "strength":
@@ -46,7 +59,7 @@ def summary(workout: sqlite3.Row, stats: sqlite3.Row | None, unit: str) -> str:
     return " · ".join(parts)
 
 
-def row(workout: sqlite3.Row, stats: sqlite3.Row | None = None, unit: str = "kg") -> str:
+def row(workout: sqlite3.Row, stats: dict | None = None, unit: str = "kg") -> str:
     """A workout in a list: icon, name, date, and its numbers underneath."""
     return ios.row(
         workout["title"], summary(workout, stats, unit), id=str(workout["id"]), kind="headline",
@@ -149,6 +162,8 @@ def exercise_sections(conn: sqlite3.Connection, workout_id: int) -> str:
         "SELECT e.* FROM exercise_sets e JOIN workout_sources s ON s.id = e.source_id"
         " WHERE s.workout_id=? ORDER BY e.exercise_index, e.set_index", (workout_id,)).fetchall()
     unit = db.get_setting(conn, "weight_unit", "kg")
+    start = conn.execute("SELECT start_ts FROM workouts WHERE id=?", (workout_id,)).fetchone()["start_ts"]
+    body = bodyweight.body_weight_on(bodyweight.weigh_ins(conn), start)
     exercises: dict[int, list[sqlite3.Row]] = {}
     for item in sets:
         exercises.setdefault(item["exercise_index"], []).append(item)
@@ -161,8 +176,12 @@ def exercise_sections(conn: sqlite3.Connection, workout_id: int) -> str:
             if not warmup:
                 working += 1    # warm-ups show as "W"; working sets are numbered from 1
             detail = []
-            if item["weight_kg"]:
-                detail.append(formatting.weight(item["weight_kg"], unit))
+            notes = []
+            load = bodyweight.set_load(item["exercise_title"], item["weight_kg"], body)
+            if load:
+                detail.append(formatting.weight(load, unit))
+            if load and bodyweight.share_of_body_weight(item["exercise_title"]) is not None:
+                notes.append("Bodyweight")
             if item["reps"] is not None:
                 detail.append(f"× {item['reps']}" if detail else f"{item['reps']} reps")
             if item["distance_m"]:
@@ -171,10 +190,14 @@ def exercise_sections(conn: sqlite3.Connection, workout_id: int) -> str:
                 detail.append(formatting.duration(item["duration_s"]))
             if item["rpe"]:
                 detail.append(f"RPE {item['rpe']:g}")
-            note = {"failure": "Failure", "dropset": "Drop set"}.get(item["set_type"], "")
+            if item["set_type"] in ("failure", "dropset"):
+                notes.append({"failure": "Failure", "dropset": "Drop set"}[item["set_type"]])
             lines.append(ios.row(" ".join(detail) or "—", leading="W" if warmup else str(working),
-                                 leading_tint="orange" if warmup else "", detail=note, kind="mono"))
-        html += ios.section(lines, title=items[0]["exercise_title"])
+                                 leading_tint="orange" if warmup else "", detail=" · ".join(notes), kind="mono"))
+        footnote = ""
+        if body and bodyweight.share_of_body_weight(items[0]["exercise_title"]) is not None:
+            footnote = f"Includes your body weight that day: {formatting.weight(body, unit)}."
+        html += ios.section(lines, title=items[0]["exercise_title"], footnote=footnote)
     return html
 
 

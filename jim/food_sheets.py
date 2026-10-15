@@ -444,8 +444,7 @@ def _estimate(conn, state: dict) -> None:
 def edit_goals() -> None:
     conn = ui.connection()
     current = nutrition.goals(conn)
-    titles = {"calories": "Calories (kcal)", "protein": "Protein (g)", "carbs": "Carbs (g)", "fat": "Fat (g)",
-              "water": "Water (L)"}
+    titles = {"calories": "Calories (kcal)", "protein": "Protein (g)", "carbs": "Carbs (g)", "fat": "Fat (g)"}
     values = {}
     with ios.card("goals"):
         for name, title in titles.items():

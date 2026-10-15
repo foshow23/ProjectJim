@@ -57,7 +57,7 @@ def import_upload(conn: sqlite3.Connection, name: str, data: bytes, progress=Non
             if result.ingest.inserted:
                 lines.append(f"New: {result.ingest.inserted}.")
             if result.ingest.merged_into_existing:
-                lines.append(f"Matched with workouts from Hevy or Apple Health: {result.ingest.merged_into_existing}.")
+                lines.append(f"Matched with workouts from Hevy: {result.ingest.merged_into_existing}.")
             if result.ingest.updated:
                 lines.append(f"Already here, refreshed: {result.ingest.updated}.")
             if result.removed:
@@ -65,10 +65,7 @@ def import_upload(conn: sqlite3.Connection, name: str, data: bytes, progress=Non
             return "Garmin", " ".join(lines)
         if apple_health.is_apple_health_export(archive):
             result = apple_health.import_archive(conn, archive)
-            lines = [f"Read {result.workouts} workouts, {result.nutrition_days} days of nutrition and "
-                     f"{result.measurements:,} body measurements."]
-            if result.ingest.merged_into_existing:
-                lines.append(f"Matched with workouts already here: {result.ingest.merged_into_existing}.")
+            lines = [f"Read {result.measurements:,} body measurements."]
             if result.sources:
                 lines.append("From: " + ", ".join(result.sources[:8]) + ".")
             return "Apple Health", " ".join(lines)

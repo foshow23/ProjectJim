@@ -35,7 +35,9 @@ _DARK = {
 
 
 def is_dark() -> bool:
-    return st.context.theme.type == "dark"
+    """Whether to use the dark colors. Follows `base` in .streamlit/config.toml (now "light"),
+    not the device's setting."""
+    return st.get_option("theme.base") == "dark"
 
 
 def color(name: str) -> str:

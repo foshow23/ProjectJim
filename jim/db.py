@@ -88,16 +88,8 @@ CREATE TABLE IF NOT EXISTS saved_foods (
     updated_at REAL NOT NULL
 );
 
--- Daily food totals from Apple Health, for days with no food log.
-CREATE TABLE IF NOT EXISTS daily_nutrition (
-    day TEXT PRIMARY KEY,
-    calories REAL NOT NULL DEFAULT 0,
-    protein REAL NOT NULL DEFAULT 0,
-    carbs REAL NOT NULL DEFAULT 0,
-    fat REAL NOT NULL DEFAULT 0,
-    water REAL NOT NULL DEFAULT 0,  -- liters
-    source_names TEXT NOT NULL DEFAULT ''
-);
+-- Earlier versions kept Apple Health's daily food totals; food now comes only from food logs.
+DROP TABLE IF EXISTS daily_nutrition;
 
 -- Body measurements: weight (kg), body_fat (0-1), resting_hr, hrv (ms), vo2max,
 -- steps and active_energy (per day), sleep_hours (per night, by wake-up day).

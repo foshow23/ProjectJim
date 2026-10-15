@@ -61,8 +61,6 @@ def summary() -> list[str]:
              macro("Protein", day.protein, goals["protein"], "g", "blue"),
              macro("Carbs", day.carbs, goals["carbs"], "g", "orange"),
              macro("Fat", day.fat, goals["fat"], "g", "purple")]
-    if day.water > 0:
-        items.append(macro("Water", day.water, goals["water"], "L", "cyan", digits=1))
     for name, value, unit in [("Fiber", day.fiber, "g"), ("Sugar", day.sugars, "g"),
                               ("Saturated fat", day.saturated_fat, "g"), ("Sodium", day.sodium, "mg")]:
         if value is not None:
@@ -80,7 +78,7 @@ def food_row(entry) -> str:
 
 html = ios.section([day_picker()])
 previous = None
-if day.is_logged or day.water > 0:
+if day.is_logged:
     html += ios.section(summary(), footnote=f"From {day.source}" if day.source else "")
 elif previous := nutrition.last_logged_day(conn, selected):
     html += ios.section([ios.row(f"Nothing logged · Go to {previous:%b} {previous.day}, Last Logged Day",

@@ -104,5 +104,5 @@ def test_top_foods_by_calories(conn):
 
 def test_goals(conn):
     assert nutrition.goals(conn) == nutrition.GOAL_DEFAULTS
-    nutrition.save_goals(conn, {"calories": 2400, "protein": 180, "carbs": 260, "fat": 80, "water": 3})
-    assert nutrition.goals(conn) == {"calories": 2400, "protein": 180, "carbs": 260, "fat": 80, "water": 3}
+    nutrition.save_goals(conn, {"calories": 2400, "protein": 180, "carbs": 260, "fat": 80})
+    assert nutrition.goals(conn) == {"calories": 2400, "protein": 180, "carbs": 260, "fat": 80}

@@ -80,14 +80,14 @@ def default_section_index(count: int, now: datetime | None = None) -> int:
 
 # --- Goals ------------------------------------------------------------------------------------
 
-GOAL_DEFAULTS = {"calories": 2200.0, "protein": 150.0, "carbs": 250.0, "fat": 70.0, "water": 2.5}
+GOAL_DEFAULTS = {"calories": 2200.0, "protein": 150.0, "carbs": 250.0, "fat": 70.0}
 # (lowest, highest, step) offered when editing each goal.
 GOAL_RANGES = {"calories": (1000.0, 5000.0, 50.0), "protein": (20.0, 400.0, 5.0), "carbs": (20.0, 600.0, 5.0),
-               "fat": (20.0, 250.0, 5.0), "water": (0.5, 6.0, 0.25)}
+               "fat": (20.0, 250.0, 5.0)}
 
 
 def goals(conn: sqlite3.Connection) -> dict[str, float]:
-    """Daily targets: kcal, grams of protein, carbs and fat, liters of water. The calorie goal
+    """Daily targets: kcal and grams of protein, carbs and fat. The calorie goal
     starts as your Lose It! budget if you imported one."""
     saved = {"calories": db.get_setting(conn, "calorie_goal")} | (db.get_setting(conn, "macro_goals") or {})
     return {name: float(saved.get(name) or default) for name, default in GOAL_DEFAULTS.items()}
@@ -95,7 +95,7 @@ def goals(conn: sqlite3.Connection) -> dict[str, float]:
 
 def save_goals(conn: sqlite3.Connection, values: dict[str, float]) -> None:
     db.set_setting(conn, "calorie_goal", values["calories"])
-    db.set_setting(conn, "macro_goals", {name: values[name] for name in ("protein", "carbs", "fat", "water")})
+    db.set_setting(conn, "macro_goals", {name: values[name] for name in ("protein", "carbs", "fat")})
 
 
 # --- Days -------------------------------------------------------------------------------------
@@ -107,12 +107,11 @@ class Day:
     protein: float = 0.0
     carbs: float = 0.0
     fat: float = 0.0
-    water: float = 0.0          # liters (only Apple Health has it)
     fiber: float | None = None  # these four are only known from a food log
     sugars: float | None = None
     sodium: float | None = None
     saturated_fat: float | None = None
-    source: str = ""            # "Lose It! food log", "Lose It! via Apple Health"
+    source: str = ""            # "Lose It! food log", "ProjectJim food log"
     entries: list[sqlite3.Row] = field(default_factory=list)
 
     @property
@@ -121,23 +120,17 @@ class Day:
 
 
 def days(conn: sqlite3.Connection, last: date, count: int) -> list[Day]:
-    """The `count` days ending with `last`, oldest first.
-
-    A day with food-log entries uses those, since they carry every food and nutrient; other days
-    use Apple Health's daily totals. Lose It! writes the same log to Health, so adding the two
-    would double count.
-    """
+    """The `count` days ending with `last`, oldest first, totaled from the food log."""
     first = last - timedelta(days=count - 1)
     span = (first.isoformat(), last.isoformat())
     entries: dict[str, list[sqlite3.Row]] = {}
     for row in conn.execute("SELECT * FROM food_entries WHERE day BETWEEN ? AND ? ORDER BY id", span):
         entries.setdefault(row["day"], []).append(row)
-    health = {row["day"]: row for row in conn.execute("SELECT * FROM daily_nutrition WHERE day BETWEEN ? AND ?", span)}
 
     result = []
     for offset in range(count):
         key = (first + timedelta(days=offset)).isoformat()
-        day = Day(day=key, water=health[key]["water"] if key in health else 0.0)
+        day = Day(day=key)
         rows = entries.get(key)
         if rows:
             def total(column, optional=False):
@@ -148,10 +141,6 @@ def days(conn: sqlite3.Connection, last: date, count: int) -> list[Day]:
             day.fiber, day.sugars = total("fiber", True), total("sugars", True)
             day.sodium, day.saturated_fat = total("sodium", True), total("saturated_fat", True)
             day.source = ", ".join(sorted({row["source"] for row in rows})) + " food log"
-        elif key in health:
-            row = health[key]
-            day.calories, day.protein, day.carbs, day.fat = row["calories"], row["protein"], row["carbs"], row["fat"]
-            day.source = f"{row['source_names']} via Apple Health" if row["source_names"] else "Apple Health"
         result.append(day)
     return result
 
@@ -172,10 +161,7 @@ def meals(day: Day, names: list[str]) -> list[tuple[str, list[sqlite3.Row]]]:
 
 
 def last_logged_day(conn: sqlite3.Connection, before: date) -> date | None:
-    row = conn.execute(
-        "SELECT MAX(day) AS day FROM (SELECT day FROM food_entries WHERE day < :d"
-        " UNION ALL SELECT day FROM daily_nutrition WHERE day < :d AND calories > 0)", {"d": before.isoformat()},
-    ).fetchone()
+    row = conn.execute("SELECT MAX(day) AS day FROM food_entries WHERE day < ?", (before.isoformat(),)).fetchone()
     return date.fromisoformat(row["day"]) if row and row["day"] else None
 
 
