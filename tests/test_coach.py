@@ -213,3 +213,21 @@ def test_requests_use_low_effort_except_on_haiku_4_5(conn, monkeypatch):
     client = FakeClient(text_reply("Nothing to report."))
     coach.ask(conn, "Hi?", client=client)
     assert "output_config" not in client.requests[0]
+
+
+def test_earlier_questions_are_sent_so_follow_ups_make_sense(data):
+    client = FakeClient(text_reply("Same as before: 2 runs."))
+    earlier = [{"question": "How many runs this month?", "answer": "You ran 2 times for 10.0 km."}]
+    coach.ask(data, "And last month?", earlier, client=client)
+    messages = client.requests[0]["messages"]
+    assert [m["role"] for m in messages] == ["user", "assistant", "user"]
+    assert messages[0]["content"] == "How many runs this month?"
+    assert messages[-1]["content"].endswith("Question: And last month?")
+
+
+def test_only_the_last_five_earlier_questions_are_sent(data):
+    client = FakeClient(text_reply("Done."))
+    earlier = [{"question": f"Question {n}?", "answer": "Answer."} for n in range(8)]
+    coach.ask(data, "Next?", earlier, client=client)
+    assert client.requests[0]["messages"][0]["content"] == "Question 3?"
+    assert len(client.requests[0]["messages"]) == 11      # 5 earlier pairs and the new question

@@ -5,9 +5,10 @@ This file is the frame around every screen: the stylesheet, the tab bar, and whi
 
 import streamlit as st
 
-from jim import ios
+from jim import ios, login
 
 st.set_page_config(page_title="ProjectJim", page_icon="🏋️", layout="centered")
+login.require_password()    # nothing below runs until the password is entered (if one is set)
 
 # (id, title, icon). Each tab's screen is views/<id>.py.
 TABS = [

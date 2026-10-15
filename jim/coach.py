@@ -701,9 +701,15 @@ def answer_with_lookups(client, conn, messages, data, lookups):
     raise CoachError("That needed too many lookups. Try a narrower question.")
 
 
-def ask(conn, question, client=None):
-    """Asks the coach a question. Returns a dict with the answer's "text", what it "looked_up",
-    and any "unverified" numbers."""
+# How many earlier questions and answers are sent along, so follow-ups ("what about last month?")
+# make sense. Older ones are left out to keep each question quick and cheap.
+MAX_EARLIER_TURNS = 5
+
+
+def ask(conn, question, earlier=None, client=None):
+    """Asks the coach a question. `earlier` is the chat so far, as a list of
+    {"question": ..., "answer": ...} dicts (oldest first). Returns a dict with the answer's
+    "text", what it "looked_up", and any "unverified" numbers."""
     if client is None:
         if not is_configured():
             raise CoachError("Add your Anthropic API key as ANTHROPIC_API_KEY in .env to use Insights "
@@ -713,7 +719,16 @@ def ask(conn, question, client=None):
     start = json.dumps(overview(conn))
     data = [start]          # everything the AI has been shown, for checking its numbers
     lookups = []
-    messages = [{"role": "user", "content": "Data overview: " + start + "\n\nQuestion: " + question}]
+
+    # The earlier questions and answers first, then the new question with today's overview.
+    messages = []
+    if earlier is None:
+        earlier = []
+    for turn in earlier[-MAX_EARLIER_TURNS:]:
+        messages.append({"role": "user", "content": turn["question"]})
+        messages.append({"role": "assistant", "content": turn["answer"]})
+        data.append(turn["answer"])     # its numbers were already checked, so they may be reused
+    messages.append({"role": "user", "content": "Data overview: " + start + "\n\nQuestion: " + question})
 
     text = answer_with_lookups(client, conn, messages, data, lookups)
     unverified = unverified_numbers(text, "\n".join(data), question)

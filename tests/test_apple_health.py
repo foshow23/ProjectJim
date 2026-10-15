@@ -1,4 +1,5 @@
-"""Apple Health's export.xml: body measurements only, never the workouts or food it also holds."""
+"""Apple Health's export.xml: body measurements, and heart rate and calories filled in on workouts from
+Hevy and Garmin (never workouts of its own, and never food)."""
 
 import io
 import zipfile
@@ -9,7 +10,7 @@ from conftest import count
 
 from jim import merger
 from jim.importers import apple_health
-from jim.models import APPLE_HEALTH, GARMIN, SourceWorkout
+from jim.models import GARMIN, HEVY, SourceWorkout
 
 Q = "HKQuantityTypeIdentifier"
 
@@ -39,39 +40,68 @@ RUN = (f'<Workout workoutActivityType="HKWorkoutActivityTypeRunning" duration="3
        f'<WorkoutStatistics type="{Q}HeartRate" average="158" unit="count/min"/></Workout>')
 LIFT = ('<Workout workoutActivityType="HKWorkoutActivityTypeTraditionalStrengthTraining" duration="48" '
         'durationUnit="min" sourceName="Hevy" startDate="2026-10-06 06:43:00 -0400" '
-        'endDate="2026-10-06 07:31:00 -0400"/>')
+        f'endDate="2026-10-06 07:31:00 -0400"><WorkoutStatistics type="{Q}HeartRate" average="110" unit="count/min"/>'
+        f'<WorkoutStatistics type="{Q}ActiveEnergyBurned" sum="250" unit="Cal"/></Workout>')
 
 
-def test_workouts_and_food_in_the_export_are_ignored(conn):
-    result = apple_health.import_export(conn, export(
-        RUN, LIFT,
-        record("DietaryEnergyConsumed", "Lose It!", "2026-10-10 12:00:00", 2100, "Cal"),
-        record("BodyMass", "Scale", "2026-10-10 07:10:00", 82, "kg"),
-    ))
-    assert result.measurements == 1
-    assert (count(conn, "workouts"), count(conn, "workout_sources"), count(conn, "food_entries")) == (0, 0, 0)
-
-
-def test_workouts_from_an_older_health_import_are_removed(conn):
-    # A run Garmin also recorded, and a lift only Health had.
+def add_garmin_run_and_hevy_lift(conn):
+    """What the Garmin and Hevy exports bring in: names and sets, but no calories on the run and
+    no heart rate or calories on the lift."""
     merger.ingest(conn, [
         SourceWorkout(source=GARMIN, external_id="garmin-77", app_name="Garmin Connect", kind="run",
-                      title="Brampton Running", start_ts=timestamp("2026-10-10 07:00:02"), duration=1795.0),
-        SourceWorkout(source=APPLE_HEALTH, external_id="Connect|1", app_name="Connect", kind="run", title=None,
-                      start_ts=timestamp("2026-10-10 07:00:00"), duration=1800.0, calories=400.0),
-        SourceWorkout(source=APPLE_HEALTH, external_id="Hevy|2", app_name="Hevy", kind="strength", title=None,
+                      title="Brampton Running", start_ts=timestamp("2026-10-10 07:00:02"), duration=1795.0,
+                      distance=5000.0, avg_hr=157.0),
+        SourceWorkout(source=HEVY, external_id="h1", app_name="Hevy", kind="strength", title="Push Day",
                       start_ts=timestamp("2026-10-06 06:43:00"), duration=2880.0),
     ])
+
+
+def test_health_fills_in_heart_rate_and_calories(conn):
+    add_garmin_run_and_hevy_lift(conn)
+    result = apple_health.import_export(conn, export(RUN, LIFT))
+    assert (result.workouts_read, result.workouts_filled_in) == (2, 2)
+    assert count(conn, "workouts") == 2         # nothing new was created
+    lift = conn.execute("SELECT * FROM workouts WHERE kind='strength'").fetchone()
+    assert (lift["title"], lift["avg_hr"], lift["calories"]) == ("Push Day", 110.0, 250.0)
+    run = conn.execute("SELECT * FROM workouts WHERE kind='run'").fetchone()
+    # Still the Garmin file's name and numbers; Health only filled in what was missing (calories).
+    assert (run["title"], run["distance"], run["avg_hr"], run["calories"]) == ("Brampton Running", 5000.0, 157.0, 400.0)
+
+
+def test_a_health_workout_with_nothing_to_fill_in_is_skipped(conn):
+    # No Hevy or Garmin workouts yet, so these would only show up as a bare "Run" and "Strength".
+    result = apple_health.import_export(conn, export(RUN, LIFT))
+    assert (result.workouts_read, result.workouts_filled_in) == (2, 0)
+    assert (count(conn, "workouts"), count(conn, "workout_sources")) == (0, 0)
+
+
+def test_health_only_workouts_from_older_imports_are_removed(conn):
+    workout_id = conn.execute("INSERT INTO workouts (kind, title, start_ts, duration) VALUES ('strength', 'Strength', ?, 2880)",
+                              (timestamp("2026-10-14 19:54:00"),)).lastrowid
+    conn.execute("INSERT INTO workout_sources (workout_id, source, external_id, app_name, kind, start_ts, duration,"
+                 " updated_at) VALUES (?, 'apple_health', 'Hevy|1', 'Hevy', 'strength', ?, 2880, 0)",
+                 (workout_id, timestamp("2026-10-14 19:54:00")))
     apple_health.import_export(conn, export())
-    assert [row["source"] for row in conn.execute("SELECT source FROM workout_sources")] == ["garmin"]
-    run = conn.execute("SELECT * FROM workouts").fetchone()
-    assert (count(conn, "workouts"), run["kind"], run["calories"]) == (1, "run", None)
+    assert (count(conn, "workouts"), count(conn, "workout_sources")) == (0, 0)
+
+
+def test_a_workout_deleted_in_hevy_takes_its_health_copy_with_it(conn):
+    add_garmin_run_and_hevy_lift(conn)
+    apple_health.import_export(conn, export(LIFT))
+    merger.remove_sources(conn, HEVY, lambda record: True)      # as if deleted in Hevy
+    assert [row["kind"] for row in conn.execute("SELECT kind FROM workouts")] == ["run"]
+
+
+def test_food_in_the_export_is_ignored(conn):
+    apple_health.import_export(conn, export(record("DietaryEnergyConsumed", "Lose It!", "2026-10-10 12:00:00", 2100, "Cal")))
+    assert count(conn, "food_entries") == 0
 
 
 def test_importing_the_export_again_changes_nothing(conn):
-    apple_health.import_export(conn, export(record("BodyMass", "Scale", "2026-10-10 07:10:00", 82, "kg")))
-    apple_health.import_export(conn, export(record("BodyMass", "Scale", "2026-10-10 07:10:00", 82, "kg")))
-    assert count(conn, "body_metrics") == 1
+    add_garmin_run_and_hevy_lift(conn)
+    apple_health.import_export(conn, export(RUN, LIFT, record("BodyMass", "Scale", "2026-10-10 07:10:00", 82, "kg")))
+    apple_health.import_export(conn, export(RUN, LIFT, record("BodyMass", "Scale", "2026-10-10 07:10:00", 82, "kg")))
+    assert (count(conn, "workouts"), count(conn, "workout_sources"), count(conn, "body_metrics")) == (2, 4, 1)
 
 
 def test_steps_count_one_device_per_day(conn):

@@ -44,8 +44,8 @@ def default_model(monkeypatch):
 
 
 def test_uses_the_cost_efficient_model_by_default(monkeypatch):
-    assert estimator.model() == "claude-haiku-4-5"
-    assert estimator.request_options("claude-haiku-4-5") == {}       # Haiku takes neither effort nor fallbacks
+    assert estimator.model() == "claude-haiku-5-5"
+    assert estimator.request_options("claude-haiku-5-5") == {}       # Haiku: no fallbacks, default effort
     monkeypatch.setenv("PROJECTJIM_MODEL", "claude-sonnet-5-5")
     assert estimator.model() == "claude-sonnet-5-5"
     options = estimator.request_options("claude-sonnet-5-5")
@@ -88,7 +88,7 @@ def test_a_question_turn_then_an_estimate():
     assert reply.estimate.calories == 720
 
     request = client.requests[1]
-    assert request["model"] == "claude-haiku-4-5"
+    assert request["model"] == "claude-haiku-5-5"
     assert request["output_format"] is Reply
     assert request["messages"] == messages and len(messages) == 3
     assert "Nigerian" in request["system"] and "oil" in request["system"]

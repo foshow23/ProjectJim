@@ -3,11 +3,18 @@
 from conftest import START, count, garmin, hevy
 
 from jim import merger
-from jim.models import APPLE_HEALTH, SourceWorkout
+from jim.models import APPLE_HEALTH, GARMIN, SourceWorkout
 
 
 def health(app="Garmin Connect", start=START, duration=3000.0, kind="strength", **values) -> SourceWorkout:
     return SourceWorkout(source=APPLE_HEALTH, external_id=f"{app}|{int(start)}", app_name=app, kind=kind, title=None,
+                         start_ts=start, duration=duration, **values)
+
+
+def other_watch(app, start=START, duration=3000.0, kind="strength", **values) -> SourceWorkout:
+    """A recording from a different app than the other records in a test. (Not Apple Health: an
+    unmatched Health record is skipped, so it can't show that two workouts stay separate.)"""
+    return SourceWorkout(source=GARMIN, external_id=f"{app}|{int(start)}", app_name=app, kind=kind, title=None,
                          start_ts=start, duration=duration, **values)
 
 
@@ -39,14 +46,14 @@ def test_two_recordings_from_the_same_app_stay_separate(conn):
 
 def test_different_kinds_or_distances_do_not_merge(conn):
     merger.ingest(conn, [garmin(distance=5000.0)])
-    merger.ingest(conn, [health(app="Watch", kind="ride", duration=1800.0)])                    # a ride isn't a run
-    merger.ingest(conn, [health(app="Phone", kind="run", duration=1800.0, distance=8000.0)])    # 60% further
+    merger.ingest(conn, [other_watch("Watch", kind="ride", duration=1800.0)])                    # a ride isn't a run
+    merger.ingest(conn, [other_watch("Phone", kind="run", duration=1800.0, distance=8000.0)])    # 60% further
     assert count(conn, "workouts") == 3
 
 
 def test_a_small_overlap_is_not_the_same_session(conn):
     merger.ingest(conn, [hevy(duration=1800.0)])
-    merger.ingest(conn, [health(start=START + 1500, duration=1800.0)])      # only the last 5 of 30 minutes
+    merger.ingest(conn, [other_watch("Watch", start=START + 1500, duration=1800.0)])      # only the last 5 of 30 minutes
     assert count(conn, "workouts") == 2
 
 

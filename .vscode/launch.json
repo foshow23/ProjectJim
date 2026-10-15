@@ -1,0 +1,17 @@
+{
+  // Run and Debug → "ProjectJim" (or F5). A Streamlit app has to be started by Streamlit
+  // (`streamlit run app.py`), not run as a plain Python file.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "ProjectJim",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "streamlit",
+      "args": ["run", "app.py"],
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "justMyCode": true
+    }
+  ]
+}

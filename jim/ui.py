@@ -65,7 +65,8 @@ def import_upload(conn: sqlite3.Connection, name: str, data: bytes, progress=Non
             return "Garmin", " ".join(lines)
         if apple_health.is_apple_health_export(archive):
             result = apple_health.import_archive(conn, archive)
-            lines = [f"Read {result.measurements:,} body measurements."]
+            lines = [f"Read {result.measurements:,} body measurements.",
+                     f"Added heart rate and calories to {result.workouts_filled_in} of your Hevy and Garmin workouts."]
             if result.sources:
                 lines.append("From: " + ", ".join(result.sources[:8]) + ".")
             return "Apple Health", " ".join(lines)

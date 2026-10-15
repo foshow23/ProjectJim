@@ -1,10 +1,13 @@
 """Apple Health's export (Health app -> profile picture -> Export All Health Data -> export.zip).
 
-A Python app can't read Apple Health live, so this reads the export instead, but only for body
-measurements: weight, body fat, sleep, resting heart rate, HRV, VO2 max, steps and active calories.
-Workouts come straight from Garmin and Hevy, and food from Lose It!, which carry more detail than
-the copies those apps write to Health. The export is the whole history, so each import replaces
-what the previous one brought in.
+A Python app can't read Apple Health live, so this reads the export instead:
+- Body measurements: weight, body fat, sleep, resting heart rate, HRV, VO2 max, steps and active
+  calories. Health is ProjectJim's only source for these.
+- Workouts, but only to fill in: Hevy's export has no heart rate or calories, so Health's copy of
+  a session adds them. A Health workout that doesn't match one from Hevy or Garmin is skipped
+  (see rule 4 in jim/merger.py).
+Food comes from Lose It! directly, so Health's food records are ignored. The export is the whole
+history, so each import replaces what the previous one brought in.
 """
 
 from __future__ import annotations
@@ -18,7 +21,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from .. import db, merger
-from ..models import APPLE_HEALTH
+from ..models import APPLE_HEALTH, SourceWorkout
 
 PREFIX = "HKQuantityTypeIdentifier"
 SLEEP = "HKCategoryTypeIdentifierSleepAnalysis"
@@ -30,7 +33,12 @@ DAILY_AVERAGE_METRICS = {"RestingHeartRate": "resting_hr", "HeartRateVariability
 # Summed per day (taking one source per day, so a watch and a phone aren't both counted).
 DAILY_SUM_METRICS = {"StepCount": "steps", "ActiveEnergyBurned": "active_energy"}
 
+WORKOUT_KINDS = {"Running": "run", "Walking": "walk", "Hiking": "hike", "Cycling": "ride", "Swimming": "swim",
+                 "TraditionalStrengthTraining": "strength", "FunctionalStrengthTraining": "strength"}
+
 # Health exports in whatever units the phone displays, so convert to ours.
+_TO_METERS = {"m": 1.0, "km": 1000.0, "mi": 1609.344, "ft": 0.3048, "yd": 0.9144, "cm": 0.01}
+_TO_SECONDS = {"min": 60.0, "s": 1.0, "hr": 3600.0}
 _TO_KILOGRAMS = {"kg": 1.0, "g": 0.001, "lb": 0.45359237, "st": 6.35029318, "oz": 0.028349523125}
 _TO_KCAL = {"kcal": 1.0, "Cal": 1.0, "kJ": 1 / 4.184, "cal": 0.001}
 
@@ -44,6 +52,8 @@ class NotAppleHealthExport(ValueError):
 @dataclass
 class HealthResult:
     measurements: int = 0
+    workouts_read: int = 0
+    workouts_filled_in: int = 0     # Hevy or Garmin workouts that Health added heart rate or calories to
     sources: list[str] = field(default_factory=list)
 
 
@@ -93,6 +103,39 @@ def sleep_hours(intervals: list[tuple[float, float]]) -> float:
     return total / 3600
 
 
+def _workout(element: ET.Element) -> SourceWorkout | None:
+    start, end = _timestamp(element.get("startDate")), _timestamp(element.get("endDate"))
+    if start is None:
+        return None
+    activity = (element.get("workoutActivityType") or "").removeprefix("HKWorkoutActivityType")
+    duration = _convert(element.get("duration"), element.get("durationUnit"), _TO_SECONDS)
+    if duration is None:
+        duration = (end - start) if end else 0.0
+    # Older exports put totals on the workout; newer ones use WorkoutStatistics children.
+    distance = _convert(element.get("totalDistance"), element.get("totalDistanceUnit"), _TO_METERS)
+    calories = _convert(element.get("totalEnergyBurned"), element.get("totalEnergyBurnedUnit"), _TO_KCAL)
+    heart_rate = elevation = None
+    for child in element:
+        if child.tag == "WorkoutStatistics":
+            kind = (child.get("type") or "").removeprefix(PREFIX)
+            if kind.startswith("Distance"):
+                distance = _convert(child.get("sum"), child.get("unit"), _TO_METERS) or distance
+            elif kind == "ActiveEnergyBurned":
+                calories = _convert(child.get("sum"), child.get("unit"), _TO_KCAL) or calories
+            elif kind == "HeartRate":
+                heart_rate = _float(child.get("average"))
+        elif child.tag == "MetadataEntry" and child.get("key") == "HKElevationAscended":
+            value, _, unit = (child.get("value") or "").partition(" ")
+            elevation = _convert(value, unit, _TO_METERS)
+    app = element.get("sourceName") or "Apple Health"
+    return SourceWorkout(
+        source=APPLE_HEALTH, external_id=f"{app}|{int(start)}", app_name=app,
+        kind=WORKOUT_KINDS.get(activity, "other"), title=None, start_ts=start, duration=duration,
+        distance=distance if distance else None, calories=calories if calories else None,
+        avg_hr=heart_rate, elevation_gain=elevation,
+    )
+
+
 def import_export(conn: sqlite3.Connection, xml_file) -> HealthResult:
     """Reads export.xml (a file object). It can be hundreds of MB, so it's streamed, not loaded."""
     samples: list[tuple[str, float, float, str]] = []                       # metric, ts, value, source
@@ -100,13 +143,20 @@ def import_export(conn: sqlite3.Connection, xml_file) -> HealthResult:
     sums: dict[tuple[str, str, str], float] = defaultdict(float)           # (metric, day, source) -> total
     sleep: dict[str, list[tuple[float, float]]] = defaultdict(list)        # wake-up day -> asleep intervals
     sources: set[str] = set()
+    workouts: list[SourceWorkout] = []
     saw_health_data = False
 
     context = ET.iterparse(xml_file, events=("start", "end"))
     _, root = next(context)
     saw_health_data = root.tag == "HealthData"
     for event, element in context:
-        if event != "end" or element.tag != "Record":
+        if event != "end" or element.tag not in ("Record", "Workout"):
+            continue
+        if element.tag == "Workout":
+            workout = _workout(element)
+            if workout is not None:
+                workouts.append(workout)
+            root.clear()
             continue
         record_type = element.get("type") or ""
         source = element.get("sourceName") or "Apple Health"
@@ -142,8 +192,18 @@ def import_export(conn: sqlite3.Connection, xml_file) -> HealthResult:
 
     result = HealthResult(sources=sorted(sources))
 
-    # Earlier versions also imported Health's copies of workouts; drop any still here.
-    merger.remove_sources(conn, APPLE_HEALTH, lambda r: True)
+    # Workouts: fill in heart rate and calories on the ones Hevy and Garmin brought in. Ones that
+    # match nothing are skipped, and ones no longer in Health are removed (the export is the full
+    # history). Removing also clears any workout left with only Health records.
+    merger.ingest(conn, workouts)
+    keep = set()
+    for workout in workouts:
+        keep.add(workout.external_id)
+    merger.remove_sources(conn, APPLE_HEALTH, lambda record: record["external_id"] not in keep)
+    merger.consolidate(conn)
+    result.workouts_read = len(workouts)
+    result.workouts_filled_in = conn.execute(
+        "SELECT COUNT(*) FROM workout_sources WHERE source = ? AND workout_id IS NOT NULL", (APPLE_HEALTH,)).fetchone()[0]
 
     # Body measurements: replace everything from the previous import. Two apps can write the
     # same weigh-in to Health (a scale's app and Garmin Connect), so keep one per minute.

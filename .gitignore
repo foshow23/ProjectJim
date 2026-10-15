@@ -8,3 +8,7 @@ __pycache__/
 data/
 .env
 .streamlit/secrets.toml
+
+# Links Streamlit makes to its built-in guide for AI coding assistants (they point into .venv)
+.agents/
+.claude/

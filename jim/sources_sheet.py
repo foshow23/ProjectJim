@@ -48,9 +48,9 @@ def show() -> None:
         ios.row("Apps seen", value=", ".join(imported.get("sources", [])) or "None yet"),
         ios.row("Body measurements", value=f"{count('SELECT COUNT(*) FROM body_metrics'):,}"),
     ], title="Apple Health", footnote=(
-        "Only body measurements come from Apple Health: weight, body fat, sleep, resting heart rate, HRV, "
-        "VO2 max, steps and active calories. Workouts come from Garmin and Hevy, and food from Lose It!, "
-        "directly. On your iPhone open Health, tap your profile picture, then Export "
+        "Apple Health brings in body measurements (weight, body fat, sleep, resting heart rate, HRV, VO2 max, "
+        "steps and active calories) and adds heart rate and calories to your Hevy and Garmin workouts. It "
+        "never adds workouts of its own; those come from Garmin and Hevy, and food from Lose It!. On your iPhone open Health, tap your profile picture, then Export "
         "All Health Data. Send the export.zip to this computer and import it above. Each import replaces the "
         "last, so re-export whenever you want fresh data."))
 

@@ -6,6 +6,9 @@ Matching rules:
    by at least half of the shorter one, and (when both have one) the distances are within 10%.
 3. A workout never takes two records from the same app (e.g. two Garmin runs), so back-to-back
    sessions stay separate.
+4. Apple Health only fills in: its records add heart rate and calories to a workout from Hevy or
+   Garmin, but never make a workout on their own (they have no name or sets, so they'd show up
+   as a bare "Strength").
 """
 
 from __future__ import annotations
@@ -28,6 +31,7 @@ class IngestResult:
     inserted: int = 0           # records seen for the first time
     updated: int = 0            # records that already existed and were refreshed
     created_workouts: int = 0   # new workouts; the rest of `inserted` joined an existing one
+    skipped: int = 0            # Apple Health records that matched no workout, so weren't added
 
     @property
     def merged_into_existing(self) -> int:
@@ -109,6 +113,10 @@ def ingest(conn: sqlite3.Connection, items: list[SourceWorkout]) -> IngestResult
         scored = [(score, c) for score, c in scored if score is not None]
         if scored:
             workout_id = max(scored, key=lambda pair: pair[0])[1].id
+        elif item.source == APPLE_HEALTH:
+            # Health only fills in (rule 4): nothing to fill in, so skip it.
+            result.skipped += 1
+            continue
         else:
             workout_id = conn.execute(
                 "INSERT INTO workouts (kind, title, start_ts, duration) VALUES (?, ?, ?, ?)",
@@ -212,8 +220,24 @@ def remove_sources(conn: sqlite3.Connection, source: str, should_remove) -> int:
         conn.execute("DELETE FROM workout_sources WHERE id=?", (record["id"],))
     for workout_id in {r["workout_id"] for r in doomed if r["workout_id"] is not None}:
         recompute(conn, workout_id)
+    # e.g. a workout deleted in Hevy can leave its Health copy behind on its own.
+    remove_health_only_workouts(conn)
     conn.commit()
     return len(doomed)
+
+
+def remove_health_only_workouts(conn: sqlite3.Connection) -> int:
+    """Deletes workouts that have nothing but Apple Health records (rule 4). Returns how many."""
+    lonely = []
+    for row in conn.execute("SELECT id FROM workouts"):
+        sources = conn.execute("SELECT DISTINCT source FROM workout_sources WHERE workout_id = ?", (row["id"],)).fetchall()
+        if len(sources) == 1 and sources[0]["source"] == APPLE_HEALTH:
+            lonely.append(row["id"])
+    for workout_id in lonely:
+        conn.execute("DELETE FROM workout_sources WHERE workout_id = ?", (workout_id,))
+        conn.execute("DELETE FROM workouts WHERE id = ?", (workout_id,))
+    conn.commit()
+    return len(lonely)
 
 
 def consolidate(conn: sqlite3.Connection) -> int:

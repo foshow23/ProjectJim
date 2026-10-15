@@ -21,9 +21,14 @@ chat = st.session_state["insights_chat"]
 def ask(question: str) -> None:
     """Asks the coach and adds the question and its answer (or what went wrong) to the chat."""
     turn = {"question": question, "answer": None, "error": None}
+    # The chat so far, so the coach can follow up. Questions that failed are left out.
+    earlier = []
+    for old in chat:
+        if old["answer"] is not None:
+            earlier.append({"question": old["question"], "answer": old["answer"]["text"]})
     try:
         with st.spinner("Looking through your data…"):
-            turn["answer"] = coach.ask(conn, question)
+            turn["answer"] = coach.ask(conn, question, earlier)
     except coach.CoachError as error:
         turn["error"] = str(error)
     chat.append(turn)

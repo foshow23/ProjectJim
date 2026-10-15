@@ -18,9 +18,9 @@ from pydantic import BaseModel
 
 from .foods import Food, Portion, food_from_amount
 
-# Claude Haiku 4.5: the most cost-efficient current model, with vision and structured outputs.
+# Claude Haiku 5.5: the cheapest current model, with vision and structured outputs.
 # Set PROJECTJIM_MODEL (e.g. claude-sonnet-5-5) for more accuracy at a higher price.
-DEFAULT_MODEL = "claude-haiku-4-5"
+DEFAULT_MODEL = "claude-haiku-5-5"
 
 SYSTEM_PROMPT = """\
 You help someone log what they eat by estimating the nutrition of a meal from a photo and/or \
@@ -112,8 +112,9 @@ def user_message(text: str, image: bytes | None = None, media_type: str = "image
 
 
 def request_options(model_name: str) -> dict:
-    """Per-model request settings. Haiku 4.5 rejects the effort setting and doesn't support
-    server-side fallbacks; the newer Sonnet and Opus models take both."""
+    """Per-model request settings. Haiku models don't support server-side fallbacks (and Haiku 4.5
+    rejects the effort setting), so they get none: Haiku 5.5 runs at its default, medium effort,
+    which suits judging portions from a photo. The larger Sonnet and Opus models take both."""
     if model_name.startswith("claude-haiku"):
         return {}
     return {
@@ -136,7 +137,8 @@ def ask(messages: list[dict], client: anthropic.Anthropic | None = None) -> tupl
     try:
         response = client.messages.parse(
             model=model(),
-            max_tokens=4096,    # replies are a sentence or two plus a small estimate
+            # Replies are short, but Haiku 5.5 thinks first and that counts toward this limit too.
+            max_tokens=16000,
             system=SYSTEM_PROMPT,
             messages=messages,
             output_format=Reply,

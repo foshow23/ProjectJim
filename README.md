@@ -35,14 +35,19 @@ workouts by these rules ([jim/merger.py](jim/merger.py)):
 1. Same source and same ID: it's the same record, so it's updated. Importing a file twice never adds copies.
 2. Different sources: the same session when the activity types are compatible, the times overlap by at least half of the shorter one, and the distances (if both have one) are within 10%.
 3. Two records from the same app are never merged, so back-to-back sessions stay separate.
+4. Apple Health only fills in. Hevy's export has no heart rate or calories, so Health's copy of
+   a session adds them, but a Health workout that matches nothing from Hevy or Garmin is skipped.
+   It has no name or sets, so it would only show up as a bare "Strength".
 
-The merged workout takes timing, heart rate and calories from the watch (Garmin) and its name and sets from where they were typed (Hevy, then Garmin). A workout's
+The merged workout takes timing, heart rate and calories from the watch (Garmin, then Apple
+Health) and its name and sets from where they were typed (Hevy, then Garmin). A workout's
 detail lists its sources at the bottom. Deleting a workout in Hevy or Garmin removes it here on
 the next import, and changing a start time in Garmin doesn't create a duplicate.
 
-Each kind of data has one source, so nothing is added up twice: workouts from Garmin and Hevy,
-food from Lose It! (or logged in ProjectJim), and only body measurements from Apple Health. Health
-holds copies of the Garmin and Lose It! data too, but those are ignored. Within Health, steps and
+Each kind of data has one main source, so nothing is added up twice: workouts from Garmin and
+Hevy (Health only fills in heart rate and calories), food from Lose It! (or logged in
+ProjectJim), and body measurements from Apple Health. Health's copies of the Lose It! food are
+ignored. Within Health, steps and
 active calories count one device per day, so the watch and the phone aren't added together.
 
 ## The AI coach stays inside your data
@@ -80,9 +85,14 @@ Built and tested with Python 3.13.
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -r requirements-lock.txt
 .venv/bin/streamlit run app.py
 ```
+
+Every library is pinned to the exact version it was tested with: `requirements.txt` lists the
+ones ProjectJim uses directly, and `requirements-lock.txt` everything, including what those
+depend on. They were checked with [pip-audit](https://pypi.org/project/pip-audit/) for known
+vulnerabilities.
 
 It opens at http://localhost:8501. Tap the ⟳ button at the top right of any tab to open
 **Sources** and import your files:
@@ -92,7 +102,7 @@ It opens at http://localhost:8501. Tap the ⟳ button at the top right of any ta
 | Garmin | Your data export (.zip, requested from Garmin's website) for the full history, or single activities as .fit, .tcx or .gpx |
 | Hevy | The workout export (.csv): Profile → Settings → Export & Import Data |
 | Lose It! | The data export (.zip) from your account settings on loseit.com |
-| Apple Health | export.zip (body measurements only): Health app → profile picture → Export All Health Data |
+| Apple Health | export.zip (body measurements, plus heart rate and calories for workouts): Health app → profile picture → Export All Health Data |
 
 Everything is stored in `data/projectjim.db` on your computer. That folder and `.env` are
 gitignored, so personal data and keys never reach GitHub.
@@ -101,19 +111,22 @@ gitignored, so personal data and keys never reach GitHub.
 
 Copy `.env.example` to `.env` and fill in:
 
-- `ANTHROPIC_API_KEY`: for AI estimates (Claude Haiku 4.5) and the Insights coach (Claude Haiku 5.5, the cheapest current model).
+- `ANTHROPIC_API_KEY`: for AI meal estimates and the Insights coach, both on Claude Haiku 5.5 (the cheapest current model).
 - `USDA_API_KEY`: a free key from api.data.gov/signup. Without one, USDA's shared demo key allows only a few searches an hour.
+- `PROJECTJIM_PASSWORD`: asked for before the app opens. Required for phone mode below.
 
 ### On your phone
 
-By default only this computer can open the app. To use it from your phone on the same Wi-Fi:
+By default only this computer can open the app. To use it from your phone on the same Wi-Fi,
+first set `PROJECTJIM_PASSWORD` in `.env` (the app won't open in this mode without one), then:
 
 ```bash
 .venv/bin/streamlit run app.py --server.address 0.0.0.0
 ```
 
-Then open the "Network URL" it prints in Safari, and use Share → Add to Home Screen. While
-it runs this way, anyone on that Wi-Fi could open it, so only do this on a network you trust.
+Then open the "Network URL" it prints in Safari, enter the password, and use Share → Add to
+Home Screen. Others on that Wi-Fi can still reach the sign-in screen, and the connection isn't
+encrypted (plain http), so use a long password and only do this on a network you trust.
 
 ## Tests
 
@@ -121,7 +134,7 @@ it runs this way, anyone on that Wi-Fi could open it, so only do this on a netwo
 .venv/bin/python -m pytest
 ```
 
-94 tests on made-up data: merging and duplicates, each importer, units and densities, the food
+97 tests on made-up data: merging and duplicates, each importer, units and densities, the food
 diary, food database parsing, bodyweight loads, the AI estimator and the Insights coach (with a
 stand-in for Claude, so no key or network is needed).
 
