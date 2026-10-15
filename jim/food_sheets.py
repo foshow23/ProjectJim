@@ -350,7 +350,7 @@ def _estimate_card(estimate: estimator.Estimate) -> str:
 
 
 def _send(state: dict, text: str, photo: bytes | None = None) -> None:
-    """Adds your message to the chat and asks Claude for the next reply."""
+    """Adds your message to the chat and asks the model for the next reply."""
     chat = state["chat"]
     chat["error"] = None
     try:

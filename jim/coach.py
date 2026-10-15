@@ -19,7 +19,7 @@ import anthropic
 
 from . import bodyweight, db, formatting, nutrition
 
-# Claude Haiku 5.5: the cheapest current model. Set PROJECTJIM_MODEL in .env to use another.
+# Haiku 5.5: the cheapest current model. Set PROJECTJIM_MODEL in .env to use another.
 DEFAULT_MODEL = "claude-haiku-5-5"
 
 # Most questions need one or two lookups. This stops it looping forever.
@@ -134,7 +134,7 @@ class CoachError(Exception):
 
 
 def model():
-    """Which Claude model to use."""
+    """Which model to use."""
     chosen = os.environ.get("PROJECTJIM_MODEL", "").strip()
     if chosen:
         return chosen
@@ -630,10 +630,10 @@ def unverified_numbers(answer, data, question=""):
     return missing
 
 
-# --- Asking Claude ----------------------------------------------------------------------------
+# --- Asking the model -------------------------------------------------------------------------
 
-def call_claude(client, messages):
-    """Sends the conversation so far to Claude and returns its reply. Turns errors into messages
+def call_model(client, messages):
+    """Sends the conversation so far to the model and returns its reply. Turns errors into messages
     that are safe to show."""
     settings = {
         "model": model(),
@@ -660,14 +660,14 @@ def call_claude(client, messages):
 
 
 def answer_with_lookups(client, conn, messages, data, lookups):
-    """Lets Claude call tools until it writes an answer, then returns the answer's text.
+    """Lets the model call tools until it writes an answer, then returns the answer's text.
 
     Every tool result is added to `data` (for checking numbers later) and a description of
     every call to `lookups` (for showing under the answer).
     """
     for round_number in range(MAX_LOOKUP_ROUNDS):
-        reply = call_claude(client, messages)
-        # Add Claude's reply to the conversation exactly as it came back (the API needs it unchanged).
+        reply = call_model(client, messages)
+        # Add the model's reply to the conversation exactly as it came back (the API needs it unchanged).
         messages.append({"role": "assistant", "content": reply.content})
 
         if reply.stop_reason == "refusal":

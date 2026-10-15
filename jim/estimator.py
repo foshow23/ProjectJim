@@ -1,4 +1,4 @@
-"""AI macro estimates: Claude looks at a photo and/or description of a meal, asks a couple of
+"""AI macro estimates: the model looks at a photo and/or description of a meal, asks a couple of
 quick questions (how oily? how big?), then estimates its nutrition.
 
 Uses the official Anthropic SDK. The key comes from ANTHROPIC_API_KEY (in .env).
@@ -18,8 +18,8 @@ from pydantic import BaseModel
 
 from .foods import Food, Portion, food_from_amount
 
-# Claude Haiku 5.5: the cheapest current model, with vision and structured outputs.
-# Set PROJECTJIM_MODEL (e.g. claude-sonnet-5-5) for more accuracy at a higher price.
+# Haiku 5.5: the cheapest current model, with vision and structured outputs.
+# Set PROJECTJIM_MODEL to a larger model for more accuracy at a higher price.
 DEFAULT_MODEL = "claude-haiku-5-5"
 
 SYSTEM_PROMPT = """\
@@ -73,7 +73,7 @@ class Estimate(BaseModel):
 
 
 class Reply(BaseModel):
-    """What Claude returns each turn. The estimate is null while it's asking questions."""
+    """What the model returns each turn. The estimate is null while it's asking questions."""
     message: str
     questions: list[Question]
     estimate: Estimate | None
@@ -92,8 +92,8 @@ def is_configured() -> bool:
 
 
 def prepare_photo(data: bytes) -> bytes:
-    """A photo ready to send: turned upright, shrunk to at most 1568 px a side (the most Claude
-    uses; larger only costs more) and saved as JPEG."""
+    """A photo ready to send: turned upright, shrunk to at most 1568 px a side (the most the
+    model uses; larger only costs more) and saved as JPEG."""
     image = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
     image.thumbnail((1568, 1568))
     output = io.BytesIO()
@@ -127,7 +127,7 @@ def request_options(model_name: str) -> dict:
 
 
 def ask(messages: list[dict], client: anthropic.Anthropic | None = None) -> tuple[Reply, dict]:
-    """Sends the conversation and returns Claude's reply plus the assistant message to append
+    """Sends the conversation and returns the model's reply plus the assistant message to append
     to the history (kept exactly as returned: the API wants history passed back unchanged)."""
     if client is None:
         if not is_configured():

@@ -1,5 +1,5 @@
-"""The AI macro estimator: what's sent to Claude and how replies and failures are handled.
-No network: a stand-in client plays Claude."""
+"""The AI macro estimator: what's sent to the model and how replies and failures are handled.
+No network: a stand-in client plays the model."""
 
 import base64
 import io

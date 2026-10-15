@@ -1,5 +1,5 @@
 """The Insights coach: its database lookups, the number check, and the ask loop.
-No network: a stand-in client plays Claude."""
+No network: a stand-in client plays the model."""
 
 import json
 from datetime import datetime
@@ -119,7 +119,7 @@ def test_ask_looks_things_up_then_answers(data):
     assert answer["unverified"] == []
     # Only ProjectJim's own tools are offered: no web search.
     assert {tool["name"] for tool in client.requests[0]["tools"]} == set(coach.LOOKUP_NAMES)
-    # The tool result went back to Claude.
+    # The tool result went back to the model.
     assert client.requests[1]["messages"][-1]["content"][0]["type"] == "tool_result"
 
 
